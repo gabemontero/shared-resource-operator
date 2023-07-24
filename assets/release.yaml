@@ -1,0 +1,825 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shared-resource-csi-driver
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    api-approved.openshift.io: https://github.com/openshift/api/pull/979
+    description: Extension for sharing ConfigMaps across Namespaces
+    displayName: SharedConfigMap
+  name: sharedconfigmaps.sharedresource.openshift.io
+spec:
+  group: sharedresource.openshift.io
+  names:
+    kind: SharedConfigMap
+    listKind: SharedConfigMapList
+    plural: sharedconfigmaps
+    singular: sharedconfigmap
+  scope: Cluster
+  versions:
+    - name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          description: "SharedConfigMap allows a ConfigMap to be shared across namespaces. Pods can mount the shared ConfigMap by adding a CSI volume to the pod specification using the \"csi.sharedresource.openshift.io\" CSI driver and a reference to the SharedConfigMap in the volume attributes: \n spec: volumes: - name: shared-configmap csi: driver: csi.sharedresource.openshift.io volumeAttributes: sharedConfigMap: my-share \n For the mount to be successful, the pod's service account must be granted permission to 'use' the named SharedConfigMap object within its namespace with an appropriate Role and RoleBinding. For compactness, here are example `oc` invocations for creating such Role and RoleBinding objects. \n `oc create role shared-resource-my-share --verb=use --resource=sharedconfigmaps.sharedresource.openshift.io --resource-name=my-share` `oc create rolebinding shared-resource-my-share --role=shared-resource-my-share --serviceaccount=my-namespace:default` \n Shared resource objects, in this case ConfigMaps, have default permissions of list, get, and watch for system authenticated users. \n Compatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support. These capabilities should not be used by applications needing long term support."
+          type: object
+          properties:
+            apiVersion:
+              description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+              type: string
+            kind:
+              description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: spec is the specification of the desired shared configmap
+              type: object
+              required:
+                - configMapRef
+              properties:
+                configMapRef:
+                  description: configMapRef is a reference to the ConfigMap to share
+                  type: object
+                  required:
+                    - name
+                    - namespace
+                  properties:
+                    name:
+                      description: name represents the name of the ConfigMap that is being referenced.
+                      type: string
+                    namespace:
+                      description: namespace represents the namespace where the referenced ConfigMap is located.
+                      type: string
+                description:
+                  description: description is a user readable explanation of what the backing resource provides.
+                  type: string
+            status:
+              description: status is the observed status of the shared configmap
+              type: object
+              properties:
+                conditions:
+                  description: conditions represents any observations made on this particular shared resource by the underlying CSI driver or Share controller.
+                  type: array
+                  items:
+                    description: "Condition contains details for one aspect of the current state of this API Resource. --- This struct is intended for direct use as an array at the field path .status.conditions.  For example, \n type FooStatus struct{ // Represents the observations of a foo's current state. // Known .status.conditions.type are: \"Available\", \"Progressing\", and \"Degraded\" // +patchMergeKey=type // +patchStrategy=merge // +listType=map // +listMapKey=type Conditions []metav1.Condition `json:\"conditions,omitempty\" patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"` \n // other fields }"
+                    type: object
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    properties:
+                      lastTransitionTime:
+                        description: lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        type: string
+                        format: date-time
+                      message:
+                        description: message is a human readable message indicating details about the transition. This may be an empty string.
+                        type: string
+                        maxLength: 32768
+                      observedGeneration:
+                        description: observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.
+                        type: integer
+                        format: int64
+                        minimum: 0
+                      reason:
+                        description: reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.
+                        type: string
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase. --- Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be useful (see .node.status.conditions), the ability to deconflict is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                        type: string
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+      served: true
+      storage: true
+      subresources:
+        status: {}
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    api-approved.openshift.io: https://github.com/openshift/api/pull/979
+    description: Extension for sharing Secrets across Namespaces
+    displayName: SharedSecret
+  name: sharedsecrets.sharedresource.openshift.io
+spec:
+  group: sharedresource.openshift.io
+  names:
+    kind: SharedSecret
+    listKind: SharedSecretList
+    plural: sharedsecrets
+    singular: sharedsecret
+  scope: Cluster
+  versions:
+    - name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          description: "SharedSecret allows a Secret to be shared across namespaces. Pods can mount the shared Secret by adding a CSI volume to the pod specification using the \"csi.sharedresource.openshift.io\" CSI driver and a reference to the SharedSecret in the volume attributes: \n spec: volumes: - name: shared-secret csi: driver: csi.sharedresource.openshift.io volumeAttributes: sharedSecret: my-share \n For the mount to be successful, the pod's service account must be granted permission to 'use' the named SharedSecret object within its namespace with an appropriate Role and RoleBinding. For compactness, here are example `oc` invocations for creating such Role and RoleBinding objects. \n `oc create role shared-resource-my-share --verb=use --resource=sharedsecrets.sharedresource.openshift.io --resource-name=my-share` `oc create rolebinding shared-resource-my-share --role=shared-resource-my-share --serviceaccount=my-namespace:default` \n Shared resource objects, in this case Secrets, have default permissions of list, get, and watch for system authenticated users. \n Compatibility level 4: No compatibility is provided, the API can change at any point for any reason. These capabilities should not be used by applications needing long term support. These capabilities should not be used by applications needing long term support."
+          type: object
+          properties:
+            apiVersion:
+              description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+              type: string
+            kind:
+              description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: spec is the specification of the desired shared secret
+              type: object
+              required:
+                - secretRef
+              properties:
+                description:
+                  description: description is a user readable explanation of what the backing resource provides.
+                  type: string
+                secretRef:
+                  description: secretRef is a reference to the Secret to share
+                  type: object
+                  required:
+                    - name
+                    - namespace
+                  properties:
+                    name:
+                      description: name represents the name of the Secret that is being referenced.
+                      type: string
+                    namespace:
+                      description: namespace represents the namespace where the referenced Secret is located.
+                      type: string
+            status:
+              description: status is the observed status of the shared secret
+              type: object
+              properties:
+                conditions:
+                  description: conditions represents any observations made on this particular shared resource by the underlying CSI driver or Share controller.
+                  type: array
+                  items:
+                    description: "Condition contains details for one aspect of the current state of this API Resource. --- This struct is intended for direct use as an array at the field path .status.conditions.  For example, \n type FooStatus struct{ // Represents the observations of a foo's current state. // Known .status.conditions.type are: \"Available\", \"Progressing\", and \"Degraded\" // +patchMergeKey=type // +patchStrategy=merge // +listType=map // +listMapKey=type Conditions []metav1.Condition `json:\"conditions,omitempty\" patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"` \n // other fields }"
+                    type: object
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    properties:
+                      lastTransitionTime:
+                        description: lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        type: string
+                        format: date-time
+                      message:
+                        description: message is a human readable message indicating details about the transition. This may be an empty string.
+                        type: string
+                        maxLength: 32768
+                      observedGeneration:
+                        description: observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance.
+                        type: integer
+                        format: int64
+                        minimum: 0
+                      reason:
+                        description: reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty.
+                        type: string
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase. --- Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be useful (see .node.status.conditions), the ability to deconflict is important. The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                        type: string
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+      served: true
+      storage: true
+      subresources:
+        status: {}
+
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: csi-driver-shared-resource-config
+  namespace: shared-resource-csi-driver
+data:
+  config.yaml: |
+    ---
+    ignoredNamespaces:
+      - openshift-machine-api
+      - openshift-kube-apiserver
+      - openshift-kube-apiserver-operator
+      - openshift-kube-scheduler
+      - openshift-kube-controller-manager
+      - openshift-kube-controller-manager-operator
+      - openshift-kube-scheduler-operator
+      - openshift-console-operator
+      - openshift-controller-manager
+      - openshift-controller-manager-operator
+      - openshift-cloud-credential-operator
+      - openshift-authentication-operator
+      - openshift-service-ca
+      - openshift-kube-storage-version-migrator-operator
+      - openshift-config-operator
+      - openshift-etcd-operator
+      - openshift-apiserver-operator
+      - openshift-cluster-csi-drivers
+      - openshift-cluster-storage-operator
+      - openshift-cluster-version
+      - openshift-image-registry
+      - openshift-machine-config-operator
+      - openshift-sdn
+      - openshift-service-ca-operator
+
+    refreshResources: true
+
+    shareRelistInterval: 10m
+
+---
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: csi.sharedresource.openshift.io
+  annotations:
+    # This CSIDriver is managed by an OCP CSI operator
+    csi.openshift.io/managed: "true"
+  labels:
+    security.openshift.io/csi-ephemeral-volume-profile: "restricted"
+spec:
+  # Supports ephemeral inline volumes.
+  volumeLifecycleModes:
+    - Ephemeral
+  # To determine at runtime which mode a volume uses, pod info and its
+  # "csi.storage.k8s.io/ephemeral" entry are needed.
+  podInfoOnMount: true
+  # Always apply pod.spec.securityContext.fsGroup, autodetection does not work for Ephemeral volumes.
+  fsGroupPolicy: File
+  # This CSI driver does not implement ControllerPublish.
+  attachRequired: false
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: shared-resource-csi-driver-node-metrics-serving-cert
+  name: shared-resource-csi-driver-node-metrics
+  namespace: shared-resource-csi-driver
+  labels:
+    app: shared-resource-csi-driver-node-metrics
+spec:
+  sessionAffinity: None
+  type: ClusterIP
+  selector:
+    app: shared-resource-csi-driver-node
+  ports:
+    - name: provisioner-m
+      port: 443
+      protocol: TCP
+      targetPort: provisioner-m
+    - name: attacher-m
+      port: 444
+      protocol: TCP
+      targetPort: attacher-m
+    - name: resizer-m
+      port: 445
+      protocol: TCP
+      targetPort: resizer-m
+
+---
+
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: shared-resource-csi-driver-node
+  namespace: shared-resource-csi-driver
+  labels:
+    app: shared-resource-csi-driver-node
+spec:
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 10%
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: shared-resource-csi-driver-node
+  template:
+    metadata:
+      labels:
+        app: shared-resource-csi-driver-node
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+    spec:
+      priorityClassName: system-node-critical
+      serviceAccountName: csi-driver-shared-resource-plugin
+      containers:
+        - name: node-driver-registrar
+          image: registry.redhat.io/openshift4/ose-csi-node-driver-registrar:v4.13.0-202307131743.p0.gee27c34.assembly.stream
+          args:
+            - --v=5
+            - --csi-address=/csi/csi.sock
+            - --kubelet-registration-path=/var/lib/kubelet/plugins/sharedresource.csi.openshift.com/csi.sock
+          securityContext:
+            # This is necessary only for systems with SELinux, where
+            # non-privileged sidecar containers cannot access unix domain socket
+            # created by privileged CSI driver container.
+            privileged: true
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+            - mountPath: /registration
+              name: registration-dir
+            - mountPath: /run/csi-data-dir
+              name: csi-data-dir
+          resources:
+            requests:
+              cpu: 10m
+              memory: 20Mi
+        - name: hostpath
+          image: registry.redhat.io/openshift4/ose-csi-driver-shared-resource-rhel8:v4.13.0-202307132344.p0.gf797d45.assembly.stream
+          # for development purposes; eventually switch to IfNotPresent
+          imagePullPolicy: IfNotPresent
+          command:
+            - csi-driver-shared-resource
+          args:
+            - --config=/var/run/configmaps/config/config.yaml
+            - "--drivername=csi.sharedresource.openshift.io"
+            - "--v=4"
+            - "--nodeid=$(KUBE_NODE_NAME)"
+          env:
+            - name: RESERVED_SHARED_CONFIGMAP_NAMES
+              value: ""
+            - name: RESERVED_SHARED_SECRET_NAMES
+              value: "openshift-etc-pki-entitlement: openshift-config-managed:etc-pki-entitlement"
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: true
+          ports:
+            - containerPort: 9898
+              name: healthz
+              protocol: TCP
+            - name: provisioner-m
+              containerPort: 6000
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /var/run/configmaps/config
+              name: config
+            - mountPath: /csi
+              name: socket-dir
+            - mountPath: /var/lib/kubelet/pods
+              mountPropagation: Bidirectional
+              name: mountpoint-dir
+            - mountPath: /var/lib/kubelet/plugins
+              mountPropagation: Bidirectional
+              name: plugins-dir
+            - mountPath: /run/csi-data-dir
+              name: csi-data-dir
+              mountPropagation: Bidirectional
+            - mountPath: /csi-volumes-map
+              name: csi-volumes-map
+            - mountPath: /dev
+              name: dev-dir
+            - mountPath: /etc/secrets
+              name: shared-resource-csi-driver-node-metrics-serving-cert
+          resources:
+            requests:
+              cpu: 10m
+              memory: 20Mi
+      volumes:
+        - configMap:
+            optional: true
+            name: csi-driver-shared-resource-config
+          name: config
+        - hostPath:
+            path: /var/lib/kubelet/plugins/sharedresource.csi.openshift.com
+            type: DirectoryOrCreate
+          name: socket-dir
+        - hostPath:
+            path: /var/lib/kubelet/pods
+            type: DirectoryOrCreate
+          name: mountpoint-dir
+        - hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
+          name: registration-dir
+        - hostPath:
+            path: /var/lib/kubelet/plugins
+            type: Directory
+          name: plugins-dir
+        - hostPath:
+            path: /var/lib/csi-volumes-map/
+            type: DirectoryOrCreate
+          name: csi-volumes-map
+        - hostPath:
+            # hostPath under /run are mounted as a tmpfs (RAM-backed filesystem)
+            path: /run/csi-data-dir
+            type: DirectoryOrCreate
+          name: csi-data-dir
+        - hostPath:
+            path: /dev
+            type: Directory
+          name: dev-dir
+        - name: shared-resource-csi-driver-node-metrics-serving-cert
+          secret:
+            defaultMode: 420
+            secretName: shared-resource-csi-driver-node-metrics-serving-cert
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: csi-driver-shared-resource-plugin
+  namespace: shared-resource-csi-driver
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: shared-resource-csi-driver-node
+  namespace: shared-resource-csi-driver
+  labels:
+    app: shared-resource-csi-driver-node
+spec:
+  selector:
+    app: shared-resource-csi-driver-node
+  ports:
+    - name: dummy
+      port: 12345
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: shared-resource-csi-driver-node-monitor
+  namespace: shared-resource-csi-driver
+spec:
+  endpoints:
+    - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      interval: 30s
+      path: /metrics
+      port: provisioner-m
+      scheme: https
+      tlsConfig:
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+        serverName: shared-resource-csi-driver-node-metrics.openshift-cluster-csi-drivers.svc
+    - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      interval: 30s
+      path: /metrics
+      port: attacher-m
+      scheme: https
+      tlsConfig:
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+        serverName: shared-resource-csi-driver-node-metrics.openshift-cluster-csi-drivers.svc
+    - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      interval: 30s
+      path: /metrics
+      port: resizer-m
+      scheme: https
+      tlsConfig:
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+        serverName: shared-resource-csi-driver-node-metrics.openshift-cluster-csi-drivers.svc
+  jobLabel: component
+  selector:
+    matchLabels:
+      app: shared-resource-csi-driver-node-metrics
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: shared-resource-secret-configmap-share-watch-sar-create
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+      - configmaps
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - sharedresource.openshift.io
+    resources:
+      - sharedconfigmaps
+      - sharedsecrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - subjectaccessreviews
+    verbs:
+      - create
+
+---
+
+# TODO: create custom SCC with things that the CSI driver needs
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: shared-resource-privileged-role
+rules:
+  - apiGroups: ["security.openshift.io"]
+    resourceNames: ["privileged"]
+    resources: ["securitycontextconstraints"]
+    verbs: ["use"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: shared-resource-secret-configmap-share-watch-sar-create
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+      - configmaps
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - sharedresource.openshift.io
+    resources:
+      - sharedconfigmaps
+      - sharedsecrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - subjectaccessreviews
+    verbs:
+      - create
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: shared-resource-secret-configmap-share-watch-sar-create
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: shared-resource-secret-configmap-share-watch-sar-create
+subjects:
+  - kind: ServiceAccount
+    name: csi-driver-shared-resource-plugin
+    namespace: shared-resource-csi-driver
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: shared-resource-node-privileged-binding
+subjects:
+  - kind: ServiceAccount
+    name: csi-driver-shared-resource-plugin
+    namespace: shared-resource-csi-driver
+roleRef:
+  kind: ClusterRole
+  name: shared-resource-privileged-role
+  apiGroup: rbac.authorization.k8s.io
+
+
+---
+# Role for accessing metrics exposed by the operator
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shared-resource-prometheus
+  namespace: shared-resource-csi-driver
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - services
+      - endpoints
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+
+---
+# Grant cluster-monitoring access to the operator metrics service
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: shared-resource-prometheus
+  namespace: shared-resource-csi-driver
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: shared-resource-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-k8s
+    namespace: openshift-monitoring
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    config.openshift.io/inject-trusted-cabundle: "true"
+  name: shared-resource-csi-driver-operator-trusted-ca-bundle
+  namespace: shared-resource-csi-driver
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shared-resource-csi-driver-webhook
+  namespace: shared-resource-csi-driver
+  labels:
+    name: shared-resource-csi-driver-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: shared-resource-csi-driver-webhook
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+      labels:
+        name: shared-resource-csi-driver-webhook
+    spec:
+      containers:
+        - image: registry.redhat.io/openshift4/ose-csi-driver-shared-resource-webhook-rhel8:v4.13.0-202307131743.p0.gf797d45.assembly.stream
+          imagePullPolicy: IfNotPresent
+          name: shared-resource-csi-driver-webhook
+          args:
+            - --tls=true
+            - --tlscert=/etc/secrets/shared-resource-csi-driver-webhook-serving-cert/tls.crt
+            - --tlskey=/etc/secrets/shared-resource-csi-driver-webhook-serving-cert/tls.key
+            - --cacert=/etc/pki/tls/certs/ca-bundle.crt
+            - --port=8443
+          env:
+            - name: RESERVED_SHARED_CONFIGMAP_NAMES
+              value: ""
+            - name: RESERVED_SHARED_SECRET_NAMES
+              value: "openshift-etc-pki-entitlement: openshift-config-managed:etc-pki-entitlement"
+          volumeMounts:
+            - name: trusted-ca-bundle
+              mountPath: /etc/pki/tls/certs/
+            - mountPath: /etc/secrets/shared-resource-csi-driver-webhook-serving-cert/
+              name: shared-resource-csi-driver-webhook-serving-cert
+          ports:
+            - name: webhook
+              containerPort: 8443
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 10m
+              memory: 20Mi
+      priorityClassName: system-cluster-critical
+      serviceAccountName: shared-resource-csi-driver-webhook
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: "NoSchedule"
+      volumes:
+        - name: shared-resource-csi-driver-webhook-serving-cert
+          secret:
+            defaultMode: 420
+            secretName: shared-resource-csi-driver-webhook-serving-cert
+        - name: trusted-ca-bundle
+          configMap:
+            name: shared-resource-csi-driver-operator-trusted-ca-bundle
+            items:
+              - key: ca-bundle.crt
+                path: ca-bundle.crt
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: shared-resource-csi-driver-pdb
+  namespace: shared-resource-csi-driver
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      name: shared-resource-csi-driver-webhook
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shared-resource-csi-driver-webhook
+  namespace: shared-resource-csi-driver
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: shared-resource-csi-driver-webhook-serving-cert
+  name: shared-resource-csi-driver-webhook
+  namespace: shared-resource-csi-driver
+  labels:
+    name: shared-resource-csi-driver-webhook
+spec:
+  sessionAffinity: None
+  type: ClusterIP
+  selector:
+    name: shared-resource-csi-driver-webhook
+  ports:
+    - name: webhook
+      port: 443
+      protocol: TCP
+      targetPort: webhook
+
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"
+  labels:
+    name: validation.webhook.csidriversharedresource
+  name: validation.webhook.csidriversharedresource
+webhooks:
+  - admissionReviewVersions:
+      - v1
+    clientConfig:
+      service:
+        name: shared-resource-csi-driver-webhook
+        namespace: shared-resource-csi-driver
+        path: /resource-validation
+        port: 443
+    name: pod.csi.sharedresource.openshift.io
+    failurePolicy: Ignore
+    matchPolicy: Equivalent
+    namespaceSelector:
+      matchExpressions:
+        - key: runlevel
+          operator: NotIn
+          values: ["0", "1"]
+        - key: openshift.io/run-level
+          operator: NotIn
+          values: ["0", "1"]
+        - key: csi.sharedresource.openshift.io/skip-validation
+          operator: NotIn
+          values: ["true"]
+    rules:
+      - operations: ["CREATE"]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        scope: "*"
+      - operations: ["CREATE"]
+        apiGroups: ["sharedresource.openshift.io"]
+        apiVersions: ["v1", "v1beta1", "v1alpha1"]
+        resources: ["sharedsecrets", "sharedconfigmaps"]
+        scope: "*"
+    sideEffects: None
+    timeoutSeconds: 10
+

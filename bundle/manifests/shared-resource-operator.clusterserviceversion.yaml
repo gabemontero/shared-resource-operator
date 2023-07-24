@@ -1,0 +1,360 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "sharedresources.developer.redhat.com.developer.redhat.com/v1",
+          "kind": "Config",
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/created-by": "shared-resource-operator",
+              "app.kubernetes.io/instance": "config-sample",
+              "app.kubernetes.io/managed-by": "kustomize",
+              "app.kubernetes.io/name": "config",
+              "app.kubernetes.io/part-of": "shared-resource-operator"
+            },
+            "name": "config-sample"
+          },
+          "spec": null
+        }
+      ]
+    capabilities: Basic Install
+    createdAt: "2023-07-21T20:49:56Z"
+    operators.operatorframework.io/builder: operator-sdk-v1.30.0
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
+  name: shared-resource-operator.v0.0.1
+  namespace: shared-resource-csi-driver-operator
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: Config is the Schema for the configs API
+      displayName: Config
+      kind: Config
+      name: configs.sharedresources.developer.redhat.com.developer.redhat.com
+      version: v1
+  description: This operator is the generally available and fully supported version
+    of the Shared Resources CSI Driver Operator originally provided as a Technology
+    Preview feature within OpenShift Container Platform.
+  displayName: Red Hat Developer Shared Resource Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - sharedresources.developer.redhat.com.developer.redhat.com
+          resources:
+          - configs
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - sharedresources.developer.redhat.com.developer.redhat.com
+          resources:
+          - configs/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - sharedresources.developer.redhat.com.developer.redhat.com
+          resources:
+          - configs/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        serviceAccountName: shared-resource-operator-controller-manager
+      deployments:
+      - label:
+          app.kubernetes.io/component: manager
+          app.kubernetes.io/created-by: shared-resource-operator
+          app.kubernetes.io/instance: controller-manager
+          app.kubernetes.io/managed-by: kustomize
+          app.kubernetes.io/name: deployment
+          app.kubernetes.io/part-of: shared-resource-operator
+          control-plane: controller-manager
+        name: shared-resource-operator-controller-manager
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              control-plane: controller-manager
+          strategy: {}
+          template:
+            metadata:
+              annotations:
+                kubectl.kubernetes.io/default-container: manager
+              labels:
+                control-plane: controller-manager
+            spec:
+              affinity:
+                nodeAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                    nodeSelectorTerms:
+                    - matchExpressions:
+                      - key: kubernetes.io/arch
+                        operator: In
+                        values:
+                        - amd64
+                        - arm64
+                        - ppc64le
+                        - s390x
+                      - key: kubernetes.io/os
+                        operator: In
+                        values:
+                        - linux
+              containers:
+              - args:
+                - --secure-listen-address=0.0.0.0:8443
+                - --upstream=http://127.0.0.1:8080/
+                - --logtostderr=true
+                - --v=0
+                image: gcr.io/kubebuilder/kube-rbac-proxy:v0.13.1
+                name: kube-rbac-proxy
+                ports:
+                - containerPort: 8443
+                  name: https
+                  protocol: TCP
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 128Mi
+                  requests:
+                    cpu: 5m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
+              - args:
+                - --health-probe-bind-address=:8081
+                - --metrics-bind-address=127.0.0.1:8080
+                - --leader-elect
+                command:
+                - /manager
+                image: quay.io/gabemontero/shared-resource-operator:v0.0.1
+                imagePullPolicy: Always
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 128Mi
+                  requests:
+                    cpu: 10m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: shared-resource-operator-controller-manager
+              terminationGracePeriodSeconds: 10
+      permissions:
+      - rules:
+        - apiGroups:
+            - apps
+          resources:
+            - daemonsets
+            - deployments
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+        - apiGroups:
+            - policy
+          resources:
+            - poddisruptionbudgets
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+        - apiGroups:
+            - monitoring.coreos.com
+          resources:
+            - servicemonitors
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+        - apiGroups:
+            - storage.k8s.io
+          resources:
+            - csidrivers
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+        - apiGroups:
+            - ""
+          resources:
+            - pods
+            - secrets
+            - endpoints
+          verbs:
+            - get
+            - list
+            - watch
+        - apiGroups:
+            - sharedresource.openshift.io
+          resources:
+            - sharedsecrets
+            - sharedconfigmaps
+          verbs:
+            - get
+            - list
+            - watch
+        - apiGroups:
+            - security.openshift.io
+          resources:
+            - securitycontextconstraints
+          resourceNames:
+            - privileged
+          verbs:
+            - use
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          - namespaces
+          - services
+          - serviceaccounts
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+            - admissionregistration.k8s.io
+          resources:
+            - validatingwebhookconfigurations
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+        - apiGroups:
+            - apiextensions.k8s.io
+          resources:
+            - customresourcedefinitions
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+        - apiGroups:
+            - rbac.authorization.k8s.io
+          resources:
+            - clusterroles
+            - clusterrolebindings
+            - roles
+            - rolebindings
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        serviceAccountName: shared-resource-operator-controller-manager
+    strategy: deployment
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - shared-resources
+  - shared-secrets
+  - shared-configmap
+  links:
+  - name: Shared Resource Operator
+    url: https://shared-resource-operator.domain
+  maturity: alpha
+  provider:
+    name: Shared Resource Operator
+  version: 0.0.1
