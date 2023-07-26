@@ -18,8 +18,10 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
+	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -33,7 +35,7 @@ import (
 type ConfigReconciler struct {
 	client.Client
 	Scheme      *runtime.Scheme
-	Manifest    manifestival.Manifest
+	Manifest    map[string]manifestival.Manifest
 	manifestErr bool
 }
 
@@ -56,9 +58,11 @@ func (r *ConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if r.manifestErr {
 		logger.Info("Retrying applying manifest's resources...")
 		r.manifestErr = false
-		if err := r.Manifest.Apply(); err != nil {
-			logger.Error(err, "rolling out manifest's resources")
-			return ctrl.Result{Requeue: true}, err
+		for key, mnf := range r.Manifest {
+			if err := mnf.Apply(); err != nil {
+				logger.Error(err, fmt.Sprintf("rolling out manifest's resources: %s", key))
+				return ctrl.Result{Requeue: true}, err
+			}
 		}
 		logger.Info("Worked this time")
 	}
@@ -80,21 +84,41 @@ func (r *ConfigReconciler) setupManifestival(logger logr.Logger) error {
 	logger.Info("GGM in setupManifestival")
 	client := mfc.NewClient(r.Client)
 
-	var err error
-	r.Manifest, err = manifestival.NewManifest(
-		"/tmp/assets/release.yaml",
-		manifestival.UseClient(client),
-		manifestival.UseLogger(logger),
-	)
-	if err != nil {
-		logger.Error(err, "got NewManifest error: %s", err.Error())
-		return err
+	// order matters
+	manifests := []string{
+		"namespace.yaml",
+		"customresourcedefinition.yaml",
+		"serviceaccount.yaml",
+		"clusterrole.yaml",
+		"clusterrolebinding.yaml",
+		"role.yaml",
+		"rolebinding.yaml",
+		"configmap.yaml",
+		"service.yaml",
+		"csidriver.yaml",
+		"servicemonitor.yaml",
+		"daemonset.yaml",
+		"poddisruptionbudget.yaml",
+		"validatingwebhookconfiguration.yaml",
+		"deployment.yaml",
 	}
-	if err = r.Manifest.Apply(); err != nil {
-		logger.Error(err, "problem applying release.yaml")
-		r.manifestErr = true
-	} else {
-		logger.Info("manifest apply was OK")
+	// golang guarantees slice from array order
+	for _, file := range manifests {
+		mnf, err := manifestival.NewManifest(
+			filepath.Join("tmp/assets", file),
+			manifestival.UseClient(client),
+			manifestival.UseLogger(logger))
+		if err != nil {
+			logger.Error(err, "got NewManifest error: %s", err.Error())
+			return err
+		}
+		r.Manifest[file] = mnf
+		if err = mnf.Apply(); err != nil {
+			logger.Error(err, "problem applying release.yaml")
+			r.manifestErr = true
+		} else {
+			logger.Info("manifest apply was OK")
+		}
 	}
 	// we will retry in reconciler
 	return nil

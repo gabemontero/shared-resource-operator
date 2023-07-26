@@ -1,0 +1,28 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: shared-resource-secret-configmap-share-watch-sar-create
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: shared-resource-secret-configmap-share-watch-sar-create
+subjects:
+  - kind: ServiceAccount
+    name: csi-driver-shared-resource-plugin
+    namespace: shared-resource-csi-driver
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: shared-resource-node-privileged-binding
+subjects:
+  - kind: ServiceAccount
+    name: csi-driver-shared-resource-plugin
+    namespace: shared-resource-csi-driver
+roleRef:
+  kind: ClusterRole
+  name: shared-resource-privileged-role
+  apiGroup: rbac.authorization.k8s.io
+

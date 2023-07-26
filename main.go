@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"github.com/manifestival/manifestival"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -90,8 +91,9 @@ func main() {
 	}
 
 	if err = (&controllers.ConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Manifest: map[string]manifestival.Manifest{},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Config")
 		os.Exit(1)
